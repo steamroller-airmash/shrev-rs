@@ -265,6 +265,10 @@ impl ReaderMeta {
         self.readers.get(id.id).map(|r| unsafe { &mut *r.get() })
     }
 
+    fn reader_const<T>(&self, id: &ReaderId<T>) -> Option<&Reader> {
+        self.readers.get(id.id).map(|r| unsafe { &*r.get() })
+    }
+
     fn reader_exclusive(&mut self, id: usize) -> &mut Reader {
         unsafe { &mut *self.readers[id].get() }
     }
@@ -473,6 +477,30 @@ impl<T: 'static> RingBuffer<T> {
             marker: PhantomData,
             reference: self.instance_id.reference(),
             drop_notifier: NoSharedAccess::new(self.free_tx.get_mut().clone()),
+        }
+    }
+
+    /// Duplicate a reader id from an existing one.
+    pub fn duplicate_reader_id(&mut self, reader_id: &ReaderId<T>) -> ReaderId<T> {
+        self.maintain();
+        let reader: &Reader = self.meta.reader_const(reader_id).unwrap_or_else(|| {
+            panic!(
+                "ReaderId not registered: {}\n\
+                 This usually means that this ReaderId \
+                 was created by a different storage",
+                reader_id.id
+            )
+        });
+        
+        let index = reader.last_index;
+        let gen = reader.generation;
+        let id = self.meta.alloc(index, gen);
+
+        ReaderId {
+            id,
+            marker: PhantomData,
+            reference: self.instance_id.reference(),
+            drop_notifier: NoSharedAccess::new(self.free_tx.get_mut().clone())
         }
     }
 

@@ -141,6 +141,22 @@ where
         self.storage.new_reader_id()
     }
 
+    /// Duplicate an existing reader.
+    /// 
+    /// Creating a new reader only allows for that reader to read events
+    /// written to the channel after it was created. However, if you need
+    /// to read events that were added to the channel before then it is
+    /// necessary to use this method.
+    /// 
+    /// The duplicated `ReaderId` will receive all events written after
+    /// the current position of the input `ReaderId`.
+    /// 
+    /// Once you no longer perform `read`s with your `ReaderId`, you should
+    /// drop it so the channel can safely overwrite events not read by it.
+    pub fn duplicate_reader(&mut self, reader_id: &ReaderId<E>) -> ReaderId<E> {
+        self.storage.duplicate_reader_id(reader_id)
+    }
+
     /// Write a slice of events into storage
     #[deprecated(note = "please use `iter_write` instead")]
     pub fn slice_write(&mut self, events: &[E])
