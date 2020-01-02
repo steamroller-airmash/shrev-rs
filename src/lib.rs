@@ -15,9 +15,9 @@ mod util;
 /// Marker trait for data to use with the EventChannel.
 ///
 /// Has an implementation for all types where its bounds are satisfied.
-pub trait Event: Send + Sync + 'static {}
+pub trait Event: 'static {}
 
-impl<T> Event for T where T: Send + Sync + 'static {}
+impl<T> Event for T where T: 'static {}
 
 const DEFAULT_CAPACITY: usize = 64;
 
@@ -142,15 +142,15 @@ where
     }
 
     /// Duplicate an existing reader.
-    /// 
+    ///
     /// Creating a new reader only allows for that reader to read events
     /// written to the channel after it was created. However, if you need
     /// to read events that were added to the channel before then it is
     /// necessary to use this method.
-    /// 
+    ///
     /// The duplicated `ReaderId` will receive all events written after
     /// the current position of the input `ReaderId`.
-    /// 
+    ///
     /// Once you no longer perform `read`s with your `ReaderId`, you should
     /// drop it so the channel can safely overwrite events not read by it.
     pub fn duplicate_reader(&mut self, reader_id: &ReaderId<E>) -> ReaderId<E> {
@@ -310,6 +310,38 @@ mod tests {
         assert_eq!(
             vec![TestEvent { data: 8 }, TestEvent { data: 9 }],
             channel.read(&mut reader_id).cloned().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn read_duplicated() {
+        let mut channel = EventChannel::new();
+
+        // This one shouldn't be seen by either channel
+        channel.single_write(TestEvent { data: 0 });
+
+        let mut reader1 = channel.register_reader();
+
+        // This one should be seen by both
+        channel.single_write(TestEvent { data: 1 });
+
+        let mut reader2 = channel.duplicate_reader(&reader1);
+
+        assert_eq!(
+            channel.read(&mut reader1).cloned().collect::<Vec<_>>(),
+            vec![TestEvent { data: 1 }]
+        );
+
+        // This one should also be seen by both
+        channel.single_write(TestEvent { data: 2 });
+
+        assert_eq!(
+            channel.read(&mut reader1).cloned().collect::<Vec<_>>(),
+            vec![TestEvent { data: 2 }]
+        );
+        assert_eq!(
+            channel.read(&mut reader2).cloned().collect::<Vec<_>>(),
+            vec![TestEvent { data: 1 }, TestEvent { data: 2 }]
         );
     }
 
